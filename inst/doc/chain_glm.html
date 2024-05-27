@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Analyzing chain data with glm</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Analyzing chain data with glm</h1>
+
+
+<div id="TOC">
+<ul>
+<li><a href="#the-data" id="toc-the-data">The data</a></li>
+<li><a href="#data-processing" id="toc-data-processing">Data
+processing</a></li>
+<li><a href="#binomial-log-linear-models" id="toc-binomial-log-linear-models">Binomial log-linear models</a>
+<ul>
+<li><a href="#fitting-the-model" id="toc-fitting-the-model">Fitting the
+model</a></li>
+<li><a href="#analysis-of-final-outbreak-size" id="toc-analysis-of-final-outbreak-size">Analysis of final outbreak
+size</a></li>
+</ul></li>
+<li><a href="#other-models-for-the-escape-probability" id="toc-other-models-for-the-escape-probability">Other models for the
+escape probability</a>
+<ul>
+<li><a href="#beckers-general-model" id="toc-beckers-general-model">Becker’s general model</a></li>
+</ul></li>
+<li><a href="#references" id="toc-references">References</a></li>
+</ul>
+</div>
+
+<p>In this tutorial we will look at how we can analyze <em>chain
+data</em> with a binomial logistic regression model in order to estimate
+the Secondary Attack Rate (SAR), We will also compare the results we get
+with an analysis using only the final outbreak sizes.</p>
+<div id="the-data" class="section level2">
+<h2>The data</h2>
+<p>The data we will look at comes from a study of of the common cold in
+66 families, all of which consisted of a mother, father, and three
+children (Brimblecombe et al., 1958). In total 756 outbreaks were
+recorded in these families over a period of 1 and a half year. The data
+was analyzed by Heasman and Reid in a 1961 paper, where each infection
+in an outbreak was classified to belong to a generation. The data is
+presented as <em>chains</em>, which in this context means how many were
+infected in each generation, not who infected whom.</p>
+<p>As shown in Becker (1989), chain data like this could be analyzed by
+modern computers using a standard implementation of a binomial
+regression model. The basic idea is to have a binomial model of the
+number of infections in the subsequent generation, given the number of
+remaining susceptible and number of currently infected individuals. In
+this tutorial we will show how to do this, and contrast with analyses of
+the final outbreaks sizes.</p>
+<p>The chain data is included in the <code>chainbinomial</code> package
+as <code>heasman_reid_1961_chains</code>. The data set is taken from
+Table V in Heasman and Reid (1961), and counts the number of outbreaks
+that were classified as a given chain. The first number of the chain is
+the number of initial infected individuals, and the subsequent numbers
+in the chain are the number of infected in the subsequent generations.
+The chains end with 0 when the outbreaks concluded with some household
+members avoiding infection.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># Load packages</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">library</span>(chainbinomial)</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="co">#&gt; Warning: package &#39;dplyr&#39; was built under R version 4.3.3</span></span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="fu">library</span>(tidyr)</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="co">#&gt; Warning: package &#39;tidyr&#39; was built under R version 4.3.3</span></span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a><span class="co"># Take a look at the chain data</span></span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="fu">head</span>(heasman_reid_1961_chains)</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="co">#&gt;     chain   n</span></span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a><span class="co">#&gt; 1     1-0 423</span></span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a><span class="co">#&gt; 2   1-1-0 131</span></span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="co">#&gt; 3   1-2-0  24</span></span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a><span class="co">#&gt; 4 1-1-1-0  36</span></span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a><span class="co">#&gt; 5   1-3-0   3</span></span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a><span class="co">#&gt; 6 1-1-2-0   8</span></span></code></pre></div>
+</div>
+<div id="data-processing" class="section level2">
+<h2>Data processing</h2>
+<p>We need to wrangle this data to get it into a format suitable for
+regression analysis. Each generation within an outbreak should be
+represented by a row in a data frame.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co"># Repeat each chain by the number of times it was observed.</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>chains_expanded <span class="ot">&lt;-</span> <span class="fu">rep</span>(heasman_reid_1961_chains<span class="sc">$</span>chain, <span class="at">times =</span> heasman_reid_1961_chains<span class="sc">$</span>n)</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="co"># Here is a function that converts chains into a long data frame.</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>chain_to_data_frame <span class="ot">&lt;-</span> <span class="cf">function</span>(x, <span class="at">split=</span><span class="st">&#39;-&#39;</span>){</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>  </span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>  <span class="co"># Split the strings into vectors.</span></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>  chain_list  <span class="ot">&lt;-</span> <span class="fu">strsplit</span>(x, <span class="at">split =</span> split)</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>  </span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>  <span class="co"># Get the lengths (number of generations) of each chain.</span></span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>  chain_lenghts <span class="ot">&lt;-</span> <span class="fu">sapply</span>(chain_list, <span class="at">FUN =</span> length)</span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a>  </span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>  <span class="co"># Initialize data.frame to store the chain data.</span></span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a>  <span class="co"># chain_number is an index variable to keep track of which chain/household the</span></span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a>  <span class="co"># data represents.</span></span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a>  chain_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">chain_number =</span> <span class="fu">rep</span>(<span class="dv">1</span><span class="sc">:</span><span class="fu">length</span>(chain_list), chain_lenghts))</span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a>  </span>
+<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a>  <span class="co"># Make a variable that indicates the generation.</span></span>
+<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a>  generation_list <span class="ot">&lt;-</span> <span class="fu">lapply</span>(chain_list, <span class="at">FUN =</span> <span class="cf">function</span>(x){<span class="dv">0</span><span class="sc">:</span>(<span class="fu">length</span>(x)<span class="sc">-</span><span class="dv">1</span>)})</span>
+<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a>  chain_df<span class="sc">$</span>generation <span class="ot">&lt;-</span> <span class="fu">unlist</span>(generation_list)</span>
+<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a>  </span>
+<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a>  <span class="co"># Add the number of infected in each generation.</span></span>
+<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a>  chain_df<span class="sc">$</span>I <span class="ot">&lt;-</span> <span class="fu">as.numeric</span>(<span class="fu">unlist</span>(chain_list))</span>
+<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a>  </span>
+<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a>  <span class="co"># split the data.frame by chain_number (index variable)</span></span>
+<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a>  df_list <span class="ot">&lt;-</span> <span class="fu">split</span>(chain_df, <span class="at">f =</span> chain_df<span class="sc">$</span>chain_number)</span>
+<span id="cb2-27"><a href="#cb2-27" tabindex="-1"></a>  </span>
+<span id="cb2-28"><a href="#cb2-28" tabindex="-1"></a>  <span class="co"># Get the number of infected in the next generaton.</span></span>
+<span id="cb2-29"><a href="#cb2-29" tabindex="-1"></a>  I_next_list <span class="ot">&lt;-</span> <span class="fu">lapply</span>(df_list, <span class="at">FUN =</span> <span class="cf">function</span>(df){<span class="fu">c</span>(df<span class="sc">$</span>I[<span class="sc">-</span><span class="dv">1</span>], <span class="cn">NA</span>)})</span>
+<span id="cb2-30"><a href="#cb2-30" tabindex="-1"></a>  chain_df<span class="sc">$</span>I_next <span class="ot">&lt;-</span> <span class="fu">unlist</span>(I_next_list)</span>
+<span id="cb2-31"><a href="#cb2-31" tabindex="-1"></a>  </span>
+<span id="cb2-32"><a href="#cb2-32" tabindex="-1"></a>  <span class="fu">return</span>(chain_df)</span>
+<span id="cb2-33"><a href="#cb2-33" tabindex="-1"></a>}</span>
+<span id="cb2-34"><a href="#cb2-34" tabindex="-1"></a></span>
+<span id="cb2-35"><a href="#cb2-35" tabindex="-1"></a>longdata <span class="ot">&lt;-</span> <span class="fu">chain_to_data_frame</span>(chains_expanded)</span>
+<span id="cb2-36"><a href="#cb2-36" tabindex="-1"></a></span>
+<span id="cb2-37"><a href="#cb2-37" tabindex="-1"></a><span class="co"># Next we need to add the number of remaining susceptible and the number </span></span>
+<span id="cb2-38"><a href="#cb2-38" tabindex="-1"></a><span class="co"># of individuals who are NOT infected in the current generation (escaped infection).</span></span>
+<span id="cb2-39"><a href="#cb2-39" tabindex="-1"></a></span>
+<span id="cb2-40"><a href="#cb2-40" tabindex="-1"></a>longdata <span class="sc">%&gt;%</span> </span>
+<span id="cb2-41"><a href="#cb2-41" tabindex="-1"></a>  <span class="fu">group_by</span>(chain_number) <span class="sc">%&gt;%</span> </span>
+<span id="cb2-42"><a href="#cb2-42" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">S =</span> <span class="dv">5</span> <span class="sc">-</span> <span class="fu">cumsum</span>(I), <span class="co"># All households are of size 5.</span></span>
+<span id="cb2-43"><a href="#cb2-43" tabindex="-1"></a>         <span class="at">ESCAPED =</span> S <span class="sc">-</span> I_next) <span class="sc">%&gt;%</span> </span>
+<span id="cb2-44"><a href="#cb2-44" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="ot">-&gt;</span> longdata</span>
+<span id="cb2-45"><a href="#cb2-45" tabindex="-1"></a></span>
+<span id="cb2-46"><a href="#cb2-46" tabindex="-1"></a><span class="fu">head</span>(longdata)</span>
+<span id="cb2-47"><a href="#cb2-47" tabindex="-1"></a><span class="co">#&gt; # A tibble: 6 × 6</span></span>
+<span id="cb2-48"><a href="#cb2-48" tabindex="-1"></a><span class="co">#&gt;   chain_number generation     I I_next     S ESCAPED</span></span>
+<span id="cb2-49"><a href="#cb2-49" tabindex="-1"></a><span class="co">#&gt;          &lt;int&gt;      &lt;int&gt; &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt;   &lt;dbl&gt;</span></span>
+<span id="cb2-50"><a href="#cb2-50" tabindex="-1"></a><span class="co">#&gt; 1            1          0     1      0     4       4</span></span>
+<span id="cb2-51"><a href="#cb2-51" tabindex="-1"></a><span class="co">#&gt; 2            1          1     0     NA     4      NA</span></span>
+<span id="cb2-52"><a href="#cb2-52" tabindex="-1"></a><span class="co">#&gt; 3            2          0     1      0     4       4</span></span>
+<span id="cb2-53"><a href="#cb2-53" tabindex="-1"></a><span class="co">#&gt; 4            2          1     0     NA     4      NA</span></span>
+<span id="cb2-54"><a href="#cb2-54" tabindex="-1"></a><span class="co">#&gt; 5            3          0     1      0     4       4</span></span>
+<span id="cb2-55"><a href="#cb2-55" tabindex="-1"></a><span class="co">#&gt; 6            3          1     0     NA     4      NA</span></span></code></pre></div>
+<p>By convention, the initial generation is numbered 0, and is the
+number of primary cases infected from outside the household. The first
+generation refers to the first generation of spread within the
+household. The variable <code>I</code> indicates how are infected in the
+current generation, and <code>I_next</code> the number of infected in
+the next generation. It is <code>NA</code> if the generation is the last
+one. <code>ESCAPED</code> indicates how many of the susceptibles avoided
+infection in the generation, and is needed by the glm function.</p>
+<p>For the purpose of binomial regression modelling we can remove the
+rows where <code>I_next</code> and <code>ESCAPED</code> are
+<code>NA</code>. We will also remove chains that start with more than
+one primary case, because these were removed in the analysis in Becker
+(1989). We can thus compare our results with the original analysis.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>longdata <span class="sc">%&gt;%</span> </span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(I_next)) <span class="sc">%&gt;%</span> </span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>  <span class="fu">group_by</span>(chain_number) <span class="sc">%&gt;%</span> </span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">TO_REMOVE =</span> <span class="fu">any</span>(generation <span class="sc">==</span> <span class="dv">0</span> <span class="sc">&amp;</span> I <span class="sc">&gt;</span> <span class="dv">1</span>)) <span class="sc">%&gt;%</span> <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span>TO_REMOVE) <span class="ot">-&gt;</span> longdata_filtered</span></code></pre></div>
+</div>
+<div id="binomial-log-linear-models" class="section level2">
+<h2>Binomial log-linear models</h2>
+<p>Now we can consider how to formulate the Binomial model for the chain
+data so that we can estimate the SAR. The number of infected in
+generation <span class="math inline">\(g+1\)</span> is modeled as a
+binomial variable of <span class="math inline">\(S_g\)</span> trials,
+with the binomial parameter <span class="math inline">\(\pi(I_g)\)</span> that will depend on the number
+of infected in generation <span class="math inline">\(g\)</span>:</p>
+<p><span class="math display">\[
+P(I_{g+1} = y) \sim \mathrm{Binomial}(\pi(I_g), n = S_g) \\
+\]</span></p>
+<p><span class="math inline">\(\pi(I_g)\)</span> is the the per-person
+risk of getting infected, and is itself a binomial probability of
+getting at least one “success” in <span class="math inline">\(I_g\)</span> trials, with the secondary attack
+rate <span class="math inline">\(\theta\)</span>. Hence</p>
+<p><span class="math display">\[
+\pi(I_g) = 1 - (1 - \theta)^{I_g}
+\]</span></p>
+<p>This particular model is sometimes referred to as the Reed-Frost
+model. We want to estimate the <span class="math inline">\(\theta\)</span>, but this is not straightforward
+using the GLM framework since there are two layers to the model. We can
+work around this by reformulating the model to be a model for the number
+of individuals who escape infection in each generation, with an escape
+parameter <span class="math inline">\(\bar{\theta} =
+1-  \theta\)</span>. Our model can then be written as</p>
+<p><span class="math display">\[
+P(S_{g+1} = y) \sim \mathrm{Binomial(\bar{\pi}(I_g), n = S_g)}
+\]</span> with</p>
+<p><span class="math display">\[
+\bar{\pi}(I_g) = \bar{\theta}^{I_g}
+\]</span></p>
+<p>Now we can formulate a binomial GLM model that models the escaping of
+infections as a function of <span class="math inline">\(I_g\)</span>
+like we want. In order to do so we need to use a log-link function for
+the binomial parameter, not a logistic link function which is the
+standard.</p>
+<p><span class="math display">\[
+P(S_{g+1} = y) \sim \mathrm{Binomial(\bar{\pi}(I_g), n = S_g)} \\
+\log(\bar{\pi}(I_g)) = \alpha + \beta I_g
+\]</span></p>
+<p>By fixing the intercept <span class="math inline">\(\alpha =
+0\)</span>, we get an estimate of <span class="math inline">\(\beta\)</span> that can be used to estimate the
+SAR. By exponentiation both sides we get <span class="math inline">\(\bar{\pi}(I_g) =  \beta^I_g =
+\bar{\theta}^{I_g}\)</span>. We can then transform the <span class="math inline">\(\beta\)</span> parameter back into the SAR
+parameter <span class="math inline">\(\theta\)</span>:</p>
+<p><span class="math display">\[
+\theta = 1 - \exp(\beta)
+\]</span></p>
+<p>Once we have an estimate of <span class="math inline">\(\beta\)</span> we can plug that in to this formula
+and get the SAR estimate <span class="math inline">\(\hat{\theta}\)</span>.</p>
+<div id="fitting-the-model" class="section level3">
+<h3>Fitting the model</h3>
+<p>We use th <code>glm</code> function to fit the model for the number
+of individuals who escape infection in each generation. In order to fit
+a binomial model with counts instead of just 1’s and 0’s, we need to
+make a matrix with the number of “successes” (number of escaped) and the
+number of “failures” (number of infected). This matrix is then given as
+the response variable in the model formula. Next we include
+<code>I</code> (the number of infected) as the only predictor. We also
+remove the intercept in the model by including <code>-1</code> in the
+formula. We also need to remember to specify the log-link for the
+binomial model.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>glm_res <span class="ot">&lt;-</span> <span class="fu">glm</span>(<span class="fu">cbind</span>(ESCAPED, I_next) <span class="sc">~</span> I <span class="sc">-</span> <span class="dv">1</span>, </span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>               <span class="at">data =</span> longdata_filtered, </span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>               <span class="at">family =</span> <span class="fu">binomial</span>(<span class="st">&#39;log&#39;</span>))</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="fu">summary</span>(glm_res)</span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">#&gt; Call:</span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt; glm(formula = cbind(ESCAPED, I_next) ~ I - 1, family = binomial(&quot;log&quot;), </span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt;     data = longdata_filtered)</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co">#&gt; Coefficients:</span></span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="co">#&gt;    Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="co">#&gt; I -0.123487   0.006067  -20.35   &lt;2e-16 ***</span></span>
+<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a><span class="co">#&gt; ---</span></span>
+<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a><span class="co">#&gt; Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</span></span>
+<span id="cb4-16"><a href="#cb4-16" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-17"><a href="#cb4-17" tabindex="-1"></a><span class="co">#&gt; (Dispersion parameter for binomial family taken to be 1)</span></span>
+<span id="cb4-18"><a href="#cb4-18" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-19"><a href="#cb4-19" tabindex="-1"></a><span class="co">#&gt;     Null deviance:    Inf  on 1003  degrees of freedom</span></span>
+<span id="cb4-20"><a href="#cb4-20" tabindex="-1"></a><span class="co">#&gt; Residual deviance: 1075.9  on 1002  degrees of freedom</span></span>
+<span id="cb4-21"><a href="#cb4-21" tabindex="-1"></a><span class="co">#&gt; AIC: 1654.5</span></span>
+<span id="cb4-22"><a href="#cb4-22" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-23"><a href="#cb4-23" tabindex="-1"></a><span class="co">#&gt; Number of Fisher Scoring iterations: 4</span></span></code></pre></div>
+<p>The estimate of the regression coefficient is -0.12 and is the log
+escape probability. The p-value associated with this estimate is not
+interesting. It tests the null hypothesis that <span class="math inline">\(\beta = 0\)</span>, which implies an escape
+probability of 1, which means that the disease in question is not
+infectious.</p>
+<p>We can get the point estimate for the SAR by</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="dv">1</span> <span class="sc">-</span> <span class="fu">exp</span>(<span class="fu">coef</span>(glm_res))</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="co">#&gt;         I </span></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="co">#&gt; 0.1161669</span></span></code></pre></div>
+<p>and compute 95% confidence intervals:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="dv">1</span> <span class="sc">-</span> <span class="fu">exp</span>(<span class="fu">confint</span>(glm_res))</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="co">#&gt;     2.5 %    97.5 % </span></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="co">#&gt; 0.1269496 0.1059353</span></span></code></pre></div>
+<p>Notice that the upper and lower limits of the interval are in the
+wrong order because of the reparameterization from escape probability to
+the SAR.</p>
+</div>
+<div id="analysis-of-final-outbreak-size" class="section level3">
+<h3>Analysis of final outbreak size</h3>
+<p>Now we can compare the estimate of the SAR from analyzing the chains,
+with the estimate we get from using only the final counts, which is the
+purpose of the <code>chainbinomial</code> package. First we need to
+compute the final outbreak sizes:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="co"># Get the number of primary cases (infected in generation 0).</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>longdata <span class="sc">%&gt;%</span> </span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>  <span class="fu">filter</span>(generation <span class="sc">==</span> <span class="dv">0</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>  <span class="fu">group_by</span>(chain_number) <span class="sc">%&gt;%</span> </span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">I0 =</span> <span class="fu">sum</span>(I), <span class="at">.groups =</span> <span class="st">&#39;drop&#39;</span>) <span class="ot">-&gt;</span> dta_i0</span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a></span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="co"># Get the sizes of the outbreaks, not counting the primary cases.</span></span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a>longdata <span class="sc">%&gt;%</span> </span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a>  <span class="fu">group_by</span>(chain_number) <span class="sc">%&gt;%</span> </span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">I =</span> <span class="fu">sum</span>(I), <span class="at">.groups =</span> <span class="st">&#39;drop&#39;</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a>  <span class="fu">left_join</span>(dta_i0, <span class="at">by =</span> <span class="st">&#39;chain_number&#39;</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a>  <span class="co"># Do not count the primary cases.</span></span>
+<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">I =</span> I <span class="sc">-</span> I0) <span class="sc">%&gt;%</span></span>
+<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a>  <span class="co"># Get the number of initial susceptibles. All households have 5 members. </span></span>
+<span id="cb7-15"><a href="#cb7-15" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">S0 =</span> <span class="dv">5</span> <span class="sc">-</span> I0) <span class="ot">-&gt;</span> dta_outbreak_sizes</span>
+<span id="cb7-16"><a href="#cb7-16" tabindex="-1"></a></span>
+<span id="cb7-17"><a href="#cb7-17" tabindex="-1"></a><span class="fu">head</span>(dta_outbreak_sizes)</span>
+<span id="cb7-18"><a href="#cb7-18" tabindex="-1"></a><span class="co">#&gt; # A tibble: 6 × 4</span></span>
+<span id="cb7-19"><a href="#cb7-19" tabindex="-1"></a><span class="co">#&gt;   chain_number     I    I0    S0</span></span>
+<span id="cb7-20"><a href="#cb7-20" tabindex="-1"></a><span class="co">#&gt;          &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;</span></span>
+<span id="cb7-21"><a href="#cb7-21" tabindex="-1"></a><span class="co">#&gt; 1            1     0     1     4</span></span>
+<span id="cb7-22"><a href="#cb7-22" tabindex="-1"></a><span class="co">#&gt; 2            2     0     1     4</span></span>
+<span id="cb7-23"><a href="#cb7-23" tabindex="-1"></a><span class="co">#&gt; 3            3     0     1     4</span></span>
+<span id="cb7-24"><a href="#cb7-24" tabindex="-1"></a><span class="co">#&gt; 4            4     0     1     4</span></span>
+<span id="cb7-25"><a href="#cb7-25" tabindex="-1"></a><span class="co">#&gt; 5            5     0     1     4</span></span>
+<span id="cb7-26"><a href="#cb7-26" tabindex="-1"></a><span class="co">#&gt; 6            6     0     1     4</span></span></code></pre></div>
+<p>Now we can fit the model, and take a look at the point estimate and
+the 95% confidence interval:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>sar_res <span class="ot">&lt;-</span> <span class="fu">estimate_sar</span>(<span class="at">infected =</span> dta_outbreak_sizes<span class="sc">$</span>I, </span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>                        <span class="at">s0 =</span> dta_outbreak_sizes<span class="sc">$</span>S0, </span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>                        <span class="at">i0 =</span> dta_outbreak_sizes<span class="sc">$</span>I0)</span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>sar_res<span class="sc">$</span>sar_hat</span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="co">#&gt; [1] 0.1113308</span></span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="fu">confint</span>(sar_res)</span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt;     2.5 %    97.5 % </span></span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="co">#&gt; 0.1007100 0.1225799</span></span></code></pre></div>
+<p>The SAR estimates are pretty similar, although not exactly the
+same.</p>
+</div>
+</div>
+<div id="other-models-for-the-escape-probability" class="section level2">
+<h2>Other models for the escape probability</h2>
+<p>Given that we can model the escape probabilities in each generation
+with the log-linear binomial model, we can try out other models as in
+Becker (1989). Becker’s model formulation is quite general, as it allows
+for the per-person risk of getting infected to depend on both the number
+infected household members and the generation number. By putting
+constraints on the parameters one can get models that corresponds to
+other classical models.</p>
+<p>Beckers general model for the escape probability can be written as
+follows:</p>
+<p><span class="math display">\[
+\log(\bar{\pi}(I_g)) = \alpha_{g+1} + \beta_{g+1} I_g
+\]</span> If we fix the coefficient <span class="math inline">\(\beta_{g+1}\)</span> to be zero (<em>i.e.</em>
+drop the predictor <span class="math inline">\(I_g\)</span>), and let
+all <span class="math inline">\(\alpha_{g+1} = \alpha\)</span>, we get
+what is referred to as the Greenwood model. In this model the escape
+probability is not modified by the number of infected individuals the
+susceptibles are exposed to, but is the same as long as there is at
+least one infected individual in the household. This model can be fitted
+by including only the intercept <span class="math inline">\(\alpha\)</span> in the model.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="co"># Greenwood model</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>glm_res2 <span class="ot">&lt;-</span> <span class="fu">glm</span>(<span class="fu">cbind</span>(ESCAPED, I_next) <span class="sc">~</span> <span class="dv">1</span>, </span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>               <span class="at">data =</span> longdata_filtered, </span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>               <span class="at">family =</span> <span class="fu">binomial</span>(<span class="st">&#39;log&#39;</span>))</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a></span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="fu">summary</span>(glm_res2)</span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a><span class="co">#&gt; Call:</span></span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a><span class="co">#&gt; glm(formula = cbind(ESCAPED, I_next) ~ 1, family = binomial(&quot;log&quot;), </span></span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a><span class="co">#&gt;     data = longdata_filtered)</span></span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a><span class="co">#&gt; Coefficients:</span></span>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a><span class="co">#&gt;              Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
+<span id="cb9-15"><a href="#cb9-15" tabindex="-1"></a><span class="co">#&gt; (Intercept) -0.126674   0.006222  -20.36   &lt;2e-16 ***</span></span>
+<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a><span class="co">#&gt; ---</span></span>
+<span id="cb9-17"><a href="#cb9-17" tabindex="-1"></a><span class="co">#&gt; Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</span></span>
+<span id="cb9-18"><a href="#cb9-18" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-19"><a href="#cb9-19" tabindex="-1"></a><span class="co">#&gt; (Dispersion parameter for binomial family taken to be 1)</span></span>
+<span id="cb9-20"><a href="#cb9-20" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-21"><a href="#cb9-21" tabindex="-1"></a><span class="co">#&gt;     Null deviance: 1079.7  on 1002  degrees of freedom</span></span>
+<span id="cb9-22"><a href="#cb9-22" tabindex="-1"></a><span class="co">#&gt; Residual deviance: 1079.7  on 1002  degrees of freedom</span></span>
+<span id="cb9-23"><a href="#cb9-23" tabindex="-1"></a><span class="co">#&gt; AIC: 1658.2</span></span>
+<span id="cb9-24"><a href="#cb9-24" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-25"><a href="#cb9-25" tabindex="-1"></a><span class="co">#&gt; Number of Fisher Scoring iterations: 4</span></span></code></pre></div>
+<p>As before we can transform the estimate of the coefficient to be an
+estimate of the SAR:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="dv">1</span> <span class="sc">-</span> <span class="fu">exp</span>(<span class="fu">coef</span>(glm_res2))</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="co">#&gt; (Intercept) </span></span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="co">#&gt;   0.1189794</span></span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a><span class="dv">1</span> <span class="sc">-</span> <span class="fu">exp</span>(<span class="fu">confint</span>(glm_res2))</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a><span class="co">#&gt; Waiting for profiling to be done...</span></span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a><span class="co">#&gt;     2.5 %    97.5 % </span></span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="co">#&gt; 0.1300027 0.1085159</span></span></code></pre></div>
+<p>The estimate is similar to the estimates from the previous analysis,
+but the interpretation is different.</p>
+<p>Since this model is simpler than the Reed-Frost model, we can get the
+Greenwood estimate by modelling the infection probability directly,
+without going via the escape probability:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>glm_res2_alt <span class="ot">&lt;-</span> <span class="fu">glm</span>(<span class="fu">cbind</span>(I_next, ESCAPED) <span class="sc">~</span> <span class="dv">1</span>, </span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>               <span class="at">data =</span> longdata_filtered, </span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>               <span class="at">family =</span> <span class="fu">binomial</span>(<span class="st">&#39;log&#39;</span>))</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a></span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="fu">exp</span>(<span class="fu">coef</span>(glm_res2_alt))</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a><span class="co">#&gt; (Intercept) </span></span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a><span class="co">#&gt;   0.1189794</span></span></code></pre></div>
+<div id="beckers-general-model" class="section level3">
+<h3>Becker’s general model</h3>
+<p>In a 1981 paper Becker introduced a variant of the Chain Binomial
+model with a separate escape probability for each generation. This model
+can be fit to chain data by including generation as a categorical
+predictor variable. This model is similar to the Greenwood model in the
+sense that the per-person risk is not directly modified by the number of
+infected indviduals in the household.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="co"># Becker&#39;s generalized model</span></span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>glm_res3 <span class="ot">&lt;-</span> <span class="fu">glm</span>(<span class="fu">cbind</span>(ESCAPED, I_next) <span class="sc">~</span> <span class="fu">as.character</span>(generation) <span class="sc">-</span> <span class="dv">1</span>, </span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>               <span class="at">data =</span> longdata_filtered, </span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>               <span class="at">family =</span> <span class="fu">binomial</span>(<span class="st">&#39;log&#39;</span>))</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a></span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a></span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a><span class="co"># Take alook at the attack rates.</span></span>
+<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a><span class="dv">1</span> <span class="sc">-</span> <span class="fu">exp</span>(<span class="fu">coef</span>(glm_res3))</span>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a><span class="co">#&gt; as.character(generation)0 as.character(generation)1 as.character(generation)2 </span></span>
+<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a><span class="co">#&gt;                 0.1076807                 0.1445428                 0.1985294 </span></span>
+<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a><span class="co">#&gt; as.character(generation)3 </span></span>
+<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a><span class="co">#&gt;                 0.2222222</span></span></code></pre></div>
+</div>
+</div>
+<div id="references" class="section level1">
+<h1>References</h1>
+<ul>
+<li><p>Brimblecombe et al. (1958) Family Studies of Respiratory
+Infections</p></li>
+<li><p>Heasman, M.A. and Reid, D.D. (1961) Theory and Observation in
+Family Epidemics of the Common Cold</p></li>
+<li><p>Becker, N.G. (1989) Analysis of Infectious Disease Data</p></li>
+<li><p>Becker, N.G. (1981) A General Chain Binomial Model for Infectious
+Diseases</p></li>
+</ul>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

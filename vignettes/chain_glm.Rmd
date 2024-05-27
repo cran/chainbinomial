@@ -1,0 +1,287 @@
+---
+title: "Analyzing chain data with glm"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{Analyzing chain data with glm}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+In this tutorial we will look at how we can analyze *chain data* with a binomial logistic regression model in order to estimate the Secondary Attack Rate (SAR), We will also compare the results we get with an analysis using only the final outbreak sizes. 
+
+## The data
+
+The data we will look at comes from a study of of the common cold in 66 families, all of which consisted of a mother, father, and three children (Brimblecombe et al., 1958). In total 756 outbreaks were recorded in these families over a period of 1 and a half year. The data was analyzed by Heasman and Reid in a 1961 paper, where each infection in an outbreak was classified to belong to a generation. The data is presented as *chains*, which in this context means how many were infected in each generation, not who infected whom.
+
+As shown in Becker (1989), chain data like this could be analyzed by modern computers using a standard implementation of a binomial regression model. The basic idea is to have a binomial model of the number of infections in the subsequent generation, given the number of remaining susceptible and number of currently infected individuals. In this tutorial we will show how to do this, and contrast with analyses of the final outbreaks sizes. 
+
+The chain data is included in the `chainbinomial` package as `heasman_reid_1961_chains`. The data set is taken from Table V in Heasman and Reid (1961), and counts the number of outbreaks that were classified as a given chain. The first number of the chain is the number of initial infected individuals, and the subsequent numbers in the chain are the number of infected in the subsequent generations. The chains end with 0 when the outbreaks concluded with some household members avoiding infection.
+
+
+```{r initialize, include=TRUE, message=FALSE}
+# Load packages
+library(chainbinomial)
+library(dplyr)
+library(tidyr)
+
+# Take a look at the chain data
+head(heasman_reid_1961_chains)
+```
+
+
+## Data processing
+
+We need to wrangle this data to get it into a format suitable for regression analysis. Each generation within an outbreak should be represented by a row in a data frame. 
+
+```{r fix_data}
+# Repeat each chain by the number of times it was observed.
+chains_expanded <- rep(heasman_reid_1961_chains$chain, times = heasman_reid_1961_chains$n)
+
+# Here is a function that converts chains into a long data frame.
+chain_to_data_frame <- function(x, split='-'){
+  
+  # Split the strings into vectors.
+  chain_list  <- strsplit(x, split = split)
+  
+  # Get the lengths (number of generations) of each chain.
+  chain_lenghts <- sapply(chain_list, FUN = length)
+  
+  # Initialize data.frame to store the chain data.
+  # chain_number is an index variable to keep track of which chain/household the
+  # data represents.
+  chain_df <- data.frame(chain_number = rep(1:length(chain_list), chain_lenghts))
+  
+  # Make a variable that indicates the generation.
+  generation_list <- lapply(chain_list, FUN = function(x){0:(length(x)-1)})
+  chain_df$generation <- unlist(generation_list)
+  
+  # Add the number of infected in each generation.
+  chain_df$I <- as.numeric(unlist(chain_list))
+  
+  # split the data.frame by chain_number (index variable)
+  df_list <- split(chain_df, f = chain_df$chain_number)
+  
+  # Get the number of infected in the next generaton.
+  I_next_list <- lapply(df_list, FUN = function(df){c(df$I[-1], NA)})
+  chain_df$I_next <- unlist(I_next_list)
+  
+  return(chain_df)
+}
+
+longdata <- chain_to_data_frame(chains_expanded)
+
+# Next we need to add the number of remaining susceptible and the number 
+# of individuals who are NOT infected in the current generation (escaped infection).
+
+longdata %>% 
+  group_by(chain_number) %>% 
+  mutate(S = 5 - cumsum(I), # All households are of size 5.
+         ESCAPED = S - I_next) %>% 
+  ungroup() -> longdata
+
+head(longdata)
+```
+
+By convention, the initial generation is numbered 0, and is the number of primary cases infected from outside the household. The first generation refers to the first generation of spread within the household. The variable `I` indicates how are infected in the current generation, and `I_next` the number of infected in the next generation. It is `NA` if the generation is the last one. `ESCAPED` indicates how many of the susceptibles avoided infection in the generation, and is needed by the glm function.
+
+For the purpose of binomial regression modelling we can remove the rows where `I_next` and `ESCAPED` are `NA`. We will also remove chains that start with more than one primary case, because these were removed in the analysis in Becker (1989). We can thus compare our results with the original analysis.
+
+```{r fix_data2}
+longdata %>% 
+  filter(!is.na(I_next)) %>% 
+  group_by(chain_number) %>% 
+  mutate(TO_REMOVE = any(generation == 0 & I > 1)) %>% ungroup() %>% 
+  filter(!TO_REMOVE) -> longdata_filtered
+
+```
+
+
+## Binomial log-linear models
+
+Now we can consider how to formulate the Binomial model for the chain data so that we can estimate the SAR. The number of infected in generation $g+1$ is modeled as a binomial variable of $S_g$ trials, with the binomial parameter $\pi(I_g)$ that will depend on the number of infected in generation $g$:
+
+$$
+P(I_{g+1} = y) \sim \mathrm{Binomial}(\pi(I_g), n = S_g) \\
+$$
+
+$\pi(I_g)$ is the the per-person risk of getting infected, and is itself a binomial probability of getting at least one "success" in $I_g$ trials, with the secondary attack rate $\theta$. Hence
+
+$$
+\pi(I_g) = 1 - (1 - \theta)^{I_g}
+$$
+
+This particular model is sometimes referred to as the Reed-Frost model. We want to estimate the $\theta$, but this is not straightforward using the GLM framework since there are two layers to the model. We can work around this by reformulating the model to be a model for the number of individuals who escape infection in each generation, with an escape parameter $\bar{\theta} = 1-  \theta$. Our model can then be written as
+
+$$
+P(S_{g+1} = y) \sim \mathrm{Binomial(\bar{\pi}(I_g), n = S_g)}
+$$
+with 
+
+$$
+\bar{\pi}(I_g) = \bar{\theta}^{I_g}
+$$
+
+Now we can formulate a binomial GLM model that models the escaping of infections as a function of $I_g$ like we want. In order to do so we need to use a log-link function for the binomial parameter, not a logistic link function which is the standard. 
+
+
+$$
+P(S_{g+1} = y) \sim \mathrm{Binomial(\bar{\pi}(I_g), n = S_g)} \\
+\log(\bar{\pi}(I_g)) = \alpha + \beta I_g
+$$
+
+By fixing the intercept $\alpha = 0$, we get an estimate of $\beta$ that can be used to estimate the SAR. By exponentiation both sides we get $\bar{\pi}(I_g) =  \beta^I_g = \bar{\theta}^{I_g}$. We can then transform the $\beta$ parameter back into the SAR parameter $\theta$:
+
+$$
+\theta = 1 - \exp(\beta)
+$$
+
+Once we have an estimate of $\beta$ we can plug that in to this formula and get the SAR estimate $\hat{\theta}$.
+
+
+### Fitting the model
+
+We use th `glm` function to fit the model for the number of individuals who escape infection in each generation. In order to fit a binomial model with counts instead of just 1's and 0's, we need to make a matrix with the number of "successes" (number of escaped) and the number of "failures" (number of infected). This matrix is then given as the response variable in the model formula. Next we include `I` (the number of infected) as the only predictor. We also remove the intercept in the model by including `-1` in the formula. We also need to remember to specify the log-link for the binomial model.
+
+
+```{r glm1}
+glm_res <- glm(cbind(ESCAPED, I_next) ~ I - 1, 
+               data = longdata_filtered, 
+               family = binomial('log'))
+
+summary(glm_res)
+```
+The estimate of the regression coefficient is `r round(coef(glm_res),2)` and is the log escape probability. The p-value associated with this estimate is not interesting. It tests the null hypothesis that $\beta = 0$, which implies an escape probability of 1, which means that the disease in question is not infectious. 
+
+We can get the point estimate for the SAR by
+
+```{r glm1_2}
+1 - exp(coef(glm_res))
+```
+and compute 95% confidence intervals:
+
+```{r glm1_3, message=FALSE}
+1 - exp(confint(glm_res))
+```
+Notice that the upper and lower limits of the interval are in the wrong order because of the reparameterization from escape probability to the SAR.
+
+
+### Analysis of final outbreak size
+
+Now we can compare the estimate of the SAR from analyzing the chains, with the estimate we get from using only the final counts, which is the purpose of the `chainbinomial` package. First we need to compute the final outbreak sizes:
+
+
+```{r final_outbreak_size1}
+# Get the number of primary cases (infected in generation 0).
+longdata %>% 
+  filter(generation == 0) %>% 
+  group_by(chain_number) %>% 
+  summarise(I0 = sum(I), .groups = 'drop') -> dta_i0
+
+# Get the sizes of the outbreaks, not counting the primary cases.
+longdata %>% 
+  group_by(chain_number) %>% 
+  summarise(I = sum(I), .groups = 'drop') %>% 
+  left_join(dta_i0, by = 'chain_number') %>% 
+  # Do not count the primary cases.
+  mutate(I = I - I0) %>%
+  # Get the number of initial susceptibles. All households have 5 members. 
+  mutate(S0 = 5 - I0) -> dta_outbreak_sizes
+
+head(dta_outbreak_sizes)
+```
+
+Now we can fit the model, and take a look at the point estimate and the 95% confidence interval:
+
+```{r final_outbreak_size2}
+sar_res <- estimate_sar(infected = dta_outbreak_sizes$I, 
+                        s0 = dta_outbreak_sizes$S0, 
+                        i0 = dta_outbreak_sizes$I0)
+
+sar_res$sar_hat
+
+confint(sar_res)
+```
+
+The SAR estimates are pretty similar, although not exactly the same. 
+
+
+
+## Other models for the escape probability 
+
+Given that we can model the escape probabilities in each generation with the log-linear binomial model, we can try out other models as in Becker (1989). Becker's model formulation is quite general, as it allows for the per-person risk of getting infected to depend on both the number infected household members and the generation number. By putting constraints on the parameters one can get models that corresponds to other classical models. 
+
+Beckers general model for the escape probability can be written as follows:
+
+$$
+\log(\bar{\pi}(I_g)) = \alpha_{g+1} + \beta_{g+1} I_g
+$$
+If we fix the coefficient $\beta_{g+1}$ to be zero (*i.e.* drop the predictor $I_g$), and let all $\alpha_{g+1} = \alpha$, we get what is referred to as the Greenwood model. In this model the escape probability is not modified by the number of infected individuals the susceptibles are exposed to, but is the same as long as there is at least one infected individual in the household. This model can be fitted by including only the intercept $\alpha$ in the model.
+
+
+```{r glm2}
+# Greenwood model
+glm_res2 <- glm(cbind(ESCAPED, I_next) ~ 1, 
+               data = longdata_filtered, 
+               family = binomial('log'))
+
+
+summary(glm_res2)
+```
+
+As before we can transform the estimate of the coefficient to be an estimate of the SAR:
+
+```{r glm2_2}
+1 - exp(coef(glm_res2))
+1 - exp(confint(glm_res2))
+```
+The estimate is similar to the estimates from the previous analysis, but the interpretation is different.
+
+Since this model is simpler than the Reed-Frost model, we can get the Greenwood estimate by modelling the infection probability directly, without going via the escape probability:
+
+```{r glm2_alt}
+glm_res2_alt <- glm(cbind(I_next, ESCAPED) ~ 1, 
+               data = longdata_filtered, 
+               family = binomial('log'))
+
+exp(coef(glm_res2_alt))
+```
+
+### Becker's general model
+
+In a 1981 paper Becker introduced a variant of the Chain Binomial model with a separate escape probability for each generation. This model can be fit to chain data by including generation as a categorical predictor variable. This model is similar to the Greenwood model in the sense that the per-person risk is not directly modified by the number of infected indviduals in the household.
+
+
+```{r glm3}
+# Becker's generalized model
+glm_res3 <- glm(cbind(ESCAPED, I_next) ~ as.character(generation) - 1, 
+               data = longdata_filtered, 
+               family = binomial('log'))
+
+
+# Take alook at the attack rates.
+1 - exp(coef(glm_res3))
+```
+
+
+
+# References
+
+- Brimblecombe et al. (1958) Family Studies of Respiratory Infections
+
+- Heasman, M.A. and Reid, D.D. (1961) Theory and Observation in Family Epidemics of the Common Cold
+
+- Becker, N.G. (1989) Analysis of Infectious Disease Data
+
+- Becker, N.G. (1981) A General Chain Binomial Model for Infectious Diseases
+
+

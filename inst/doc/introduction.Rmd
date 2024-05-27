@@ -1,0 +1,197 @@
+---
+title: "Introduction to the chainbinomial package"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{Introduction to the chainbinomial package}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+
+
+```
+
+The Chain Binomial model for infectious disease spread is especially suitable for modelling of small outbreaks, such as outbreaks in households. This package contains tools for analyzing data using the Chain Binomial model.
+
+The chain Binomial model has a single parameter, which is the the secondary attack rate (SAR). The household secondary attack rate is defined as the probability that an infected household member infects a susceptible household member.
+
+This package contains functions related to the Chain Binomial probability distribution, as well as functions for estimating the SAR parameter and regression modelling relating the SAR to predictive factors. To get started the package need to be loaded as usual:
+
+```{r loadpackage}
+library(chainbinomial)
+require(dplyr)
+require(tidyr)
+```
+
+
+# The Chain Binomial model
+
+The Chain Binomial model is a simple model for the spread of a infectious disease in a closed population, such as a household. An infectious disease is introduced into the household at time point 0 by one or more primary cases, which is denoted as $I_0$. The disease then spreads among the remaining $S_0$ household members, who are all susceptible to the disease, in discrete time steps called generations. In each generation 0 or more of the remaining susceptibles become infected, and the infected individuals from the previous generation is considered recovered and immune, and does not anymore contribute to the spread of the disease. The number of new infections in generation $g+1$ is modeled as a binomial model that depends on the number of infected $I_g$ and the number of remaining susceptibles $S_g$, in addition to the SAR.
+
+
+$$
+P(I_{g+1} | I_{g}, S_g. \theta) = \binom{S_g}{I_{g+1}} \pi_{g+1}^{I_{g+1}} (1-\pi_{g+1})^{S_g - I_{g+1}}
+$$
+
+where 
+
+$$
+\pi_{g+1} = 1 - (1-\theta)^{I_{g}}
+$$
+is the per-person risk for getting infected, and depends on the the secondary attack rate (denoted $\theta$) and the number of infected individuals in generation $g$. This is the binomial probability of getting at least one "success" in $I_g$ binomial trials with probability $\theta$. This model is also referred to as the Reed-Frost model.
+
+The point of the `chainbinomial` package is not to analyze the number of new infections in each generation since that is already possible using the `glm` function already included in R. A tutorial for doing this can be found by typing `vignette('chain_glm', package = "chainbinomial")`. Instead, the goal of this package is to analyze the final size of the outbreaks, that is, the final counts of the number of infected in each outbreak. 
+
+## The final Chain Binomial count probabilities
+
+The Chain binomial probability of getting an outbreak of size $I = x$ in a household of $S_0$ initially susceptible individuals, with $I_0$ introductory cases is
+
+$$
+P(I = x; S_0, I_0, \theta) = \binom{S_0}{x} P(x,x) (1-\theta)^{S_0 - x + I_0} (1-\theta)^{x(S_0 - x)}
+$$
+Notice that this formula is recursive, as it also depends on $P(x,x)$, which is given as
+
+$$
+P(I = x, S_0 = x) = 1 - \sum_{j=1}^{x-1} P(I = j, S_0 = x)
+$$
+The recursion bottoms out at
+
+$$
+P(I=1, S_0 = 1; I_0) = 1 - P(I=0, S_0 = 1; I_0) = 1 - (1-\theta)^{I_0}
+$$
+
+This formula was derived by Ludwig (1975). The `dchainbinom` function can be used to compute these probabilities, and it works similarly to other discrete probability mass functions in R such as the `dbinom` and `dpois`.
+
+
+Consider a household with 4 persons. A single household member becomes infected by a contagious disease outside of the household, and the other 3 household members are susceptible to the disease. Assuming a secondary attack rate of 0.23, we can compute the probability that 2 of the 3 susceptible household members becomes infected as follows: 
+
+```{r ex1}
+dchainbinom(x = 2, s0 = 3, i0 = 1, sar = 0.23)
+```
+
+
+We can also compute the entire final size distribution
+
+```{r ex2}
+dchainbinom(x = 0:3, s0 = 3, i0 = 1, sar = 0.23)
+```
+
+Suppose instead that 2 of the 4 household members were infected simultaneously outside of the household. Then $I_0 = 2$. We can again compute the final size distribution. Note that the number of initial susceptible household members $S_0$ is now 2.
+
+```{r ex3}
+dchainbinom(x = 0:2, s0 = 2, i0 = 2, sar = 0.23)
+```
+
+
+## The incomplete Chain Binomial count probabilities
+
+Now suppose that we don't have observed the entire outbreak, but have observed the outbreak for a time corresponding to two generations. There is no simple formula for the probability of an outbreak after a given number of generations, but it is possible to compute it by considering all possible scenarios that lead to the desired number of cases, see Lindstrøm et al. (2024). 
+
+The entire probability distribution after 2 generations can be computed using the `generations` argument. By default the `generations` argument is Inf, meaning that the outbreak is assumed to be completely observed.
+
+```{r ex4}
+dchainbinom(x = 0:3, s0 = 3, i0 = 1, sar = 0.23, generations = 2)
+```
+
+# Estimating the SAR
+
+
+The data we will look at comes from a study of of the common cold in 66 families, all of which consisted of a mother, father, and three children (Brimblecombe et al., 1958). In total 664 outbreaks were recorded in these families over a period of 1 and a half year. The data was analyzed by Heasman and Reid in a 1961 paper, where each infection in an outbreak was classified according to who the index case was. The data is included in the package as `heasman_reid_1961_intro_case_status` and contains the data from Table II in the 1961 paper.
+
+Lets take a look at the data:
+
+```{r data1}
+heasman_reid_1961_intro_case_status
+```
+The table counts the number of outbreaks that falls into each category (type of index case by number of infected). For analysis we need to make the data into a suitable long format, with one row for each outbreak.
+
+
+```{r data2, message=FALSE}
+library(dplyr)
+library(tidyr)
+
+heasman_reid_1961_intro_case_status %>% 
+  pivot_longer(cols = -1, 
+               names_to = 'intro_case', 
+               values_to = 'N') %>% 
+  uncount(weights = N) -> intro_case_status_long
+
+head(intro_case_status_long)
+```
+
+For the purpose of illustration, we will only estimate the SAR for outbreaks where the fathers were the index case. We can estimate the SAR using the `estimate_sar` function. We need to give it the number of infected and `s0` as input. `s0` will be 4 in this case, since number of index cases is always 1 and all families are of size 5. We can also give the arguments `i0` and `generations` as in the `dchainbinom` function, but the default values are the correct ones in this case (`i0 = 1` and `generations = Inf`).
+
+```{r sar1}
+intro_case_status_long %>% 
+  filter(intro_case == 'father') -> intro_case_status_long_fathers
+
+
+sar_est <- estimate_sar(infected = intro_case_status_long_fathers$furter_cases, s0 = 4)
+
+sar_est$sar_hat
+```
+
+Now let us take a look at the point estimate:
+
+```{r sar2}
+sar_est$sar_hat
+```
+
+We can also compute the confidence intervals: 
+```{r sar3}
+confint(sar_est)
+```
+
+
+## Regression model
+
+With an estimate of the SAR in families where the primary case was the father, a natural question would be what the SAR is when other family members are the primary case. The `cbmod` function let us do a regression analysis similar to the `glm` function, with predictors for the SAR. The `cbmod` function does not implement the formula interface as the `glm` function does, but you can use the `model.matrix` function instead. 
+
+Note that `s0`, `i0`, and `generations` should not be thought of as predictor variables in the traditional sense and should in general not be included in the X matrix.
+
+You can also specify the link function to be used. Here we specify the `identity` link, which gives coefficients that are easy to interpret. Other options are `log`, `logit`, and `cloglog`. The `identity` link might not be suitable if there are more than one predictor or the predictor is numerical instead of categorical. 
+
+
+```{r cbmod1}
+xmat <- model.matrix(~ intro_case, data = intro_case_status_long)
+
+cbmod_res <- cbmod(y = intro_case_status_long$furter_cases,
+                   s0 = rep(4, nrow(intro_case_status_long)), 
+                   x = xmat, 
+                   i0 = 1, 
+                   link = 'identity')
+
+
+summary(cbmod_res)
+```
+
+The output from the summary function gives you the coefficients and the associated standard errors and p-values of the null hypothesis that the coefficient is 0. Above the table of coefficients there are also an omnibus test of the entire model that tests if the model has better fit than a model with intercept-only (the null model). 
+
+Confidence intervals for all the coefficients can also be computed:
+
+```{r cbmod2}
+confint(cbmod_res)
+```
+
+`predict`, `vcov`, `coef`, `tidy`, and `glance` methods are also available for `cbmod` objects.
+
+
+# References
+
+- Ludwig, D. (1975) Final Size Distributions for Epidemics. Mathematical Biosciences, 23, 33-46. [https://doi.org/10.1016/0025-5564(75)90119-4](https://doi.org/10.1016/0025-5564(75)90119-4){.uri}
+
+
+- Lindstrøm JC, et al (2024) Estimating the household secondary attack rate with the Incomplete Chain Binomial model. <https://doi.org/10.48550/arXiv.2403.03948>
+
+- Brimblecombe et al. (1958) Family Studies of Respiratory Infections
+
+- Heasman, M.A. and Reid, D.D. (1961) Theory and Observation in Family Epidemics of the Common Cold
+
+
